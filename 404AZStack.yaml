@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudFormation template with Apache installed on EC2 instances in VPC-11 setup
+Description: Deploy two VPCs with Apache-installed EC2 instances (no instance profile used)
 
 Parameters:
   KeyName:
     Type: AWS::EC2::KeyPair::KeyName
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Description: Name of an existing EC2 KeyPair to enable SSH access
 
 Resources:
   # VPCs
@@ -32,7 +32,7 @@ Resources:
   InternetGateway11A:
     Type: AWS::EC2::InternetGateway
 
-  InternetGatewayAttachment11A:
+  AttachIGW11A:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC11A
@@ -41,7 +41,7 @@ Resources:
   InternetGateway11B:
     Type: AWS::EC2::InternetGateway
 
-  InternetGatewayAttachment11B:
+  AttachIGW11B:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC11B
@@ -70,7 +70,7 @@ Resources:
         - Key: Name
           Value: Public-11B
 
-  # Route Tables and Associations
+  # Route Tables and Routes
   RouteTable11A:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -78,7 +78,7 @@ Resources:
 
   Route11A:
     Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment11A
+    DependsOn: AttachIGW11A
     Properties:
       RouteTableId: !Ref RouteTable11A
       DestinationCidrBlock: 0.0.0.0/0
@@ -97,7 +97,7 @@ Resources:
 
   Route11B:
     Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment11B
+    DependsOn: AttachIGW11B
     Properties:
       RouteTableId: !Ref RouteTable11B
       DestinationCidrBlock: 0.0.0.0/0
@@ -110,10 +110,10 @@ Resources:
       RouteTableId: !Ref RouteTable11B
 
   # Security Groups
-  InstanceSG11A:
+  WebServerSG11A:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable SSH and HTTP
+      GroupDescription: Allow HTTP and SSH
       VpcId: !Ref VPC11A
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -125,10 +125,10 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
 
-  InstanceSG11B:
+  WebServerSG11B:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable SSH and HTTP
+      GroupDescription: Allow HTTP and SSH
       VpcId: !Ref VPC11B
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -140,53 +140,48 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
 
-  # IAM Instance Profile
-  LabInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
-    Properties:
-      Roles: [ "LabRole" ]
-
-  # EC2 Instances with Apache Installation
-  EC2Instance11A:
+  # EC2 Instances with Apache and PHP (no instance profile used)
+  WebServer11A:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0c55b159cbfafe1f0
-      InstanceType: t2.micro
+      InstanceType: t3.small
+      ImageId: ami-0a5c3558529277641  # Amazon Linux 2 in most regions
       SubnetId: !Ref PublicSubnet11A
-      SecurityGroupIds:
-        - !Ref InstanceSG11A
-      IamInstanceProfile: !Ref LabInstanceProfile
       KeyName: !Ref KeyName
-      Tags:
-        - Key: Name
-          Value: EC2-11A
+      SecurityGroupIds:
+        - !Ref WebServerSG11A
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           yum update -y
-          yum install -y httpd
+          yum install -y httpd php php-mysql
           systemctl start httpd
           systemctl enable httpd
-          echo "<html><h1>Hello from EC2-11A (Apache Web Server)</h1></html>" > /var/www/html/index.html
+          echo "<?php phpinfo(); ?>" > /var/www/html/index.php
 
-  EC2Instance11B:
+  WebServer11B:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0c55b159cbfafe1f0
-      InstanceType: t2.micro
+      InstanceType: t3.small
+      ImageId: ami-0a5c3558529277641  # Amazon Linux 2 in most regions
       SubnetId: !Ref PublicSubnet11B
-      SecurityGroupIds:
-        - !Ref InstanceSG11B
-      IamInstanceProfile: !Ref LabInstanceProfile
       KeyName: !Ref KeyName
-      Tags:
-        - Key: Name
-          Value: EC2-11B
+      SecurityGroupIds:
+        - !Ref WebServerSG11B
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           yum update -y
-          yum install -y httpd
+          yum install -y httpd php php-mysql
           systemctl start httpd
           systemctl enable httpd
-          echo "<html><h1>Hello from EC2-11B (Apache Web Server)</h1></html>" > /var/www/html/index.html
+          echo "<?php phpinfo(); ?>" > /var/www/html/index.php
+
+Outputs:
+  PublicIP11A:
+    Description: Public IP of EC2 in VPC11A
+    Value: !GetAtt WebServer11A.PublicIp
+
+  PublicIP11B:
+    Description: Public IP of EC2 in VPC11B
+    Value: !GetAtt WebServer11B.PublicIp
