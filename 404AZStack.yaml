@@ -1,88 +1,197 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Test Stack
+Description: "Two VPCs with subnets and EC2 instances - Network 11.0.0.0/16"
 
 Resources:
-  VPC1:
+
+  # VPCs
+  VPC11A:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
+      CidrBlock: 11.0.0.0/16
       Tags:
         - Key: Name
-          Value: VPC1
-  # Subnet for Web Server (Public subnet in VPC1)
-  PublicSubnetVPC1:
+          Value: VPC-11A
+
+  VPC11B:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 11.1.0.0/16
+      Tags:
+        - Key: Name
+          Value: VPC-11B
+
+  # Subnets for VPC11A
+  PublicSubnet11A:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC1
-      CidrBlock: 10.0.1.0/24
+      VpcId: !Ref VPC11A
+      CidrBlock: 11.0.1.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
       MapPublicIpOnLaunch: true
-      AvailabilityZone: !Select
-        - 0
-        - !GetAZs ''
       Tags:
         - Key: Name
-          Value: Public-Subnet-VPC1
-  # Internet Gateway for VPC1 (for web server)
-  InternetGateway:
+          Value: PublicSubnet-11A
+
+  PrivateSubnet11A:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC11A
+      CidrBlock: 11.0.2.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet-11A
+
+  # Subnets for VPC11B
+  PublicSubnet11B:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC11B
+      CidrBlock: 11.1.1.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet-11B
+
+  PrivateSubnet11B:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC11B
+      CidrBlock: 11.1.2.0/24
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet-11B
+
+  # Internet Gateway and Route Tables for VPC11A
+  InternetGateway11A:
     Type: AWS::EC2::InternetGateway
-  AttachGateway:
+
+  AttachGateway11A:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref VPC1
-      InternetGatewayId: !Ref InternetGateway
-  # Route Table for Public Subnet in VPC1
-  PublicRouteTableVPC1:
+      VpcId: !Ref VPC11A
+      InternetGatewayId: !Ref InternetGateway11A
+
+  RouteTable11A:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC1
-  PublicRoute:
+      VpcId: !Ref VPC11A
+
+  Route11A:
     Type: AWS::EC2::Route
-    DependsOn: AttachGateway
     Properties:
-      RouteTableId: !Ref PublicRouteTableVPC1
+      RouteTableId: !Ref RouteTable11A
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-  # Associate Public Route Table with Public Subnet
-  PublicRouteTableAssociation:
+      GatewayId: !Ref InternetGateway11A
+
+  PublicSubnet11ARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnetVPC1
-      RouteTableId: !Ref PublicRouteTableVPC1
-  # Security Group for Web Server in VPC1
-  WebServerSecurityGroup:
+      SubnetId: !Ref PublicSubnet11A
+      RouteTableId: !Ref RouteTable11A
+
+  # Internet Gateway and Route Tables for VPC11B
+  InternetGateway11B:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway11B:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC11B
+      InternetGatewayId: !Ref InternetGateway11B
+
+  RouteTable11B:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC11B
+
+  Route11B:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTable11B
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway11B
+
+  PublicSubnet11BRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet11B
+      RouteTableId: !Ref RouteTable11B
+
+  # Security Groups
+  InstanceSG11A:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP and SSH
-      VpcId: !Ref VPC1
+      GroupDescription: Access to instances in VPC11A
+      VpcId: !Ref VPC11A
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: 0.0.0.0/0
-  # EC2 Instance for Web Server in VPC1
-  WebServerInstance:
+
+  InstanceSG11B:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Access to instances in VPC11B
+      VpcId: !Ref VPC11B
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  # EC2 Instances
+  EC2Instance11A:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t3.small
-      ImageId: ami-0a5c3558529277641
-      SubnetId: !Ref PublicSubnetVPC1
+      ImageId: ami-0c55b159cbfafe1f0  # Example AMI ID (Amazon Linux 2 in some regions)
+      InstanceType: t2.micro
+      SubnetId: !Ref PublicSubnet11A
       SecurityGroupIds:
-        - !Ref WebServerSecurityGroup
-      KeyName: vockey
-      UserData: !Base64 |
-        #!/bin/bash
-        yum update -y
-        yum install -y httpd php php-mysql
-        systemctl start httpd
-        systemctl enable httpd
-        echo "<?php phpinfo(); ?>" > /var/www/html/index.php
+        - !Ref InstanceSG11A
+      IamInstanceProfile: !Ref LabInstanceProfile
+      Tags:
+        - Key: Name
+          Value: EC2-11A
+
+  EC2Instance11B:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c55b159cbfafe1f0  # Example AMI ID (Amazon Linux 2 in some regions)
+      InstanceType: t2.micro
+      SubnetId: !Ref PublicSubnet11B
+      SecurityGroupIds:
+        - !Ref InstanceSG11B
+      IamInstanceProfile: !Ref LabInstanceProfile
+      Tags:
+        - Key: Name
+          Value: EC2-11B
+
+  # IAM Instance Profile (reuses LabRole)
+  LabInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - LabRole
+
 Outputs:
-  WebServerPublicIP:
-    Description: Public IP address of the web server instance
-    Value: !GetAtt WebServerInstance.PublicIp
+  VPC11AID:
+    Description: VPC 11A ID
+    Value: !Ref VPC11A
+
+  VPC11BID:
+    Description: VPC 11B ID
+    Value: !Ref VPC11B
+
+  EC2Instance11APublicIP:
+    Description: Public IP of EC2 instance in VPC11A
+    Value: !GetAtt EC2Instance11A.PublicIp
+
+  EC2Instance11BPublicIP:
+    Description: Public IP of EC2 instance in VPC11B
+    Value: !GetAtt EC2Instance11B.PublicIp
