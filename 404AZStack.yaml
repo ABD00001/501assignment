@@ -1,70 +1,13 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  MedEquip Cloud Infrastructure with MDB and MApp VPCs, VPC Peering, Routing,
-  Security Groups, a Bastion Host, and two Apache Web Servers in MApp VPC.
-
-Parameters:
-  BastionKeyName:
-    Description: Name of an existing EC2 KeyPair to SSH into Bastion Host
-    Type: AWS::EC2::KeyPair::KeyName
-  BastionAllowedIP:
-    Description: Public IP (CIDR) allowed to SSH into the Bastion Host (e.g., 203.0.113.0/32)
-    Type: String
+  MedEquip Cloud Infrastructure with MApp VPC and
+  Bastion Host + Two Web Servers with Apache installed.
+  Instances connected to MApp public subnets (one in each AZ).
+  Security groups excluded for manual setup later.
 
 Resources:
 
-  ### MDB VPC and Subnets
-  MDBVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.10.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: MDB-VPC
-
-  MDBPrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref MDBVPC
-      CidrBlock: 10.10.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: MDB-Private-Subnet-1
-
-  MDBPrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref MDBVPC
-      CidrBlock: 10.10.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: MDB-Private-Subnet-2
-
-  MDBPrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref MDBVPC
-      Tags:
-        - Key: Name
-          Value: MDB-Private-RouteTable
-
-  MDBPrivateSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref MDBPrivateSubnet1
-      RouteTableId: !Ref MDBPrivateRouteTable
-
-  MDBPrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref MDBPrivateSubnet2
-      RouteTableId: !Ref MDBPrivateRouteTable
-
-  ### MApp VPC and Subnets
+  ### MApp VPC and Subnets (same as your original)
   MAppVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -138,77 +81,26 @@ Resources:
       SubnetId: !Ref MAppPublicSubnet2
       RouteTableId: !Ref MAppPublicRouteTable
 
-  ### VPC Peering
-  VPCPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      VpcId: !Ref MDBVPC
-      PeerVpcId: !Ref MAppVPC
-      Tags:
-        - Key: Name
-          Value: MDB-MApp-Peering
-
-  MDBToMAppPeeringRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref MDBPrivateRouteTable
-      DestinationCidrBlock: 10.20.0.0/16
-      VpcPeeringConnectionId: !Ref VPCPeeringConnection
-
-  MAppPublicToMDBPeeringRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref MAppPublicRouteTable
-      DestinationCidrBlock: 10.10.0.0/16
-      VpcPeeringConnectionId: !Ref VPCPeeringConnection
-
-  ### Security Groups
-  MDBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow SSH from MApp VPC
-      VpcId: !Ref MDBVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 10.20.0.0/16
-
-  BastionSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow SSH from user IP
-      VpcId: !Ref MAppVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref BastionAllowedIP
-
-  ### Bastion Host
+  ### Bastion Host Instance (no SG, fixed key pair 'vockey.pem')
   BastionHost:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      KeyName: !Ref BastionKeyName
+      KeyName: vockey.pem
       SubnetId: !Ref MAppPublicSubnet1
-      ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI (update as needed)
-      SecurityGroupIds:
-        - !Ref BastionSecurityGroup
+      ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 (update if needed)
       Tags:
         - Key: Name
           Value: BastionHost
 
-  ### Web Server 1 - AZ 1
+  ### Web Server 1 in AZ1 with Apache
   MAppWebServer1:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      KeyName: !Ref BastionKeyName
+      KeyName: vockey.pem
       SubnetId: !Ref MAppPublicSubnet1
       ImageId: ami-0c02fb55956c7d316
-      SecurityGroupIds:
-        - !Ref BastionSecurityGroup
       UserData:
         Fn::Base64: |
           #!/bin/bash
@@ -220,16 +112,14 @@ Resources:
         - Key: Name
           Value: MApp-WebServer-1
 
-  ### Web Server 2 - AZ 2
+  ### Web Server 2 in AZ2 with Apache
   MAppWebServer2:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      KeyName: !Ref BastionKeyName
+      KeyName: vockey.pem
       SubnetId: !Ref MAppPublicSubnet2
       ImageId: ami-0c02fb55956c7d316
-      SecurityGroupIds:
-        - !Ref BastionSecurityGroup
       UserData:
         Fn::Base64: |
           #!/bin/bash
@@ -242,14 +132,14 @@ Resources:
           Value: MApp-WebServer-2
 
 Outputs:
-  BastionHostPublicIP:
-    Description: Public IP of the Bastion Host
-    Value: !GetAtt BastionHost.PublicIp
+  BastionHostId:
+    Description: Instance ID of Bastion Host
+    Value: !Ref BastionHost
 
-  WebServer1PublicIP:
-    Description: Public IP of MApp Web Server 1
-    Value: !GetAtt MAppWebServer1.PublicIp
+  WebServer1Id:
+    Description: Instance ID of MApp Web Server 1
+    Value: !Ref MAppWebServer1
 
-  WebServer2PublicIP:
-    Description: Public IP of MApp Web Server 2
-    Value: !GetAtt MAppWebServer2.PublicIp
+  WebServer2Id:
+    Description: Instance ID of MApp Web Server 2
+    Value: !Ref MAppWebServer2
