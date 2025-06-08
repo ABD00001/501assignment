@@ -3,11 +3,11 @@ Description: >
   MedEquip Cloud Infrastructure with MApp VPC and
   Bastion Host + Two Web Servers with Apache installed.
   Instances connected to MApp public subnets (one in each AZ).
-  Security groups excluded for manual setup later.
+  No KeyPair assigned (you will add manually).
 
 Resources:
 
-  ### MApp VPC and Subnets (same as your original)
+  ### MApp VPC and Subnets
   MAppVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -81,24 +81,22 @@ Resources:
       SubnetId: !Ref MAppPublicSubnet2
       RouteTableId: !Ref MAppPublicRouteTable
 
-  ### Bastion Host Instance (no SG, fixed key pair 'vockey.pem')
+  ### Bastion Host Instance (no KeyName)
   BastionHost:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      KeyName: vockey.pem
       SubnetId: !Ref MAppPublicSubnet1
       ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 (update if needed)
       Tags:
         - Key: Name
           Value: BastionHost
 
-  ### Web Server 1 in AZ1 with Apache
+  ### Web Server 1 in AZ1 with Apache (no KeyName)
   MAppWebServer1:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      KeyName: vockey.pem
       SubnetId: !Ref MAppPublicSubnet1
       ImageId: ami-0c02fb55956c7d316
       UserData:
@@ -112,12 +110,11 @@ Resources:
         - Key: Name
           Value: MApp-WebServer-1
 
-  ### Web Server 2 in AZ2 with Apache
+  ### Web Server 2 in AZ2 with Apache (no KeyName)
   MAppWebServer2:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      KeyName: vockey.pem
       SubnetId: !Ref MAppPublicSubnet2
       ImageId: ami-0c02fb55956c7d316
       UserData:
