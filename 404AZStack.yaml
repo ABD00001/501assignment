@@ -3,14 +3,6 @@ Description: >
   MedEquip Cloud Infrastructure with MDB and MApp VPCs, VPC Peering, Routing,
   Security Groups, and a Bastion Host to access MDB VPC's private resources.
 
-Parameters:
-  BastionKeyName:
-    Description: Name of an existing EC2 KeyPair to SSH into Bastion Host
-    Type: AWS::EC2::KeyPair::KeyName
-  BastionAllowedIP:
-    Description: Public IP (CIDR) allowed to SSH into the Bastion Host (e.g., 203.0.113.0/32)
-    Type: String
-
 Resources:
 
   ### MDB VPC and Subnets
@@ -145,7 +137,7 @@ Resources:
       DestinationCidrBlock: 10.10.0.0/16
       VpcPeeringConnectionId: !Ref VPCPeeringConnection
 
-  ### Security Groups
+  ### Security Group for MDB (Optional; retained for internal SSH if needed)
   MDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -157,27 +149,13 @@ Resources:
           ToPort: 22
           CidrIp: 10.20.0.0/16
 
-  BastionSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow SSH from user IP
-      VpcId: !Ref MAppVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref BastionAllowedIP
-
-  ### Bastion Host
+  ### Simplified Bastion Host (no security group or key setup)
   BastionHost:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      KeyName: !Ref BastionKeyName
+      ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 (verify region)
       SubnetId: !Ref MAppPublicSubnet1
-      ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI (update as needed)
-      SecurityGroupIds:
-        - !Ref BastionSecurityGroup
       Tags:
         - Key: Name
           Value: BastionHost
