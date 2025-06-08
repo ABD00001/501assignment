@@ -1,11 +1,19 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  MedEquip International Cloud Infrastructure with two VPCs: MDB (private only) and MApp (public + private),
-  VPC Peering, subnets, routing, and security groups configured for the use case.
+  MedEquip Cloud Infrastructure with MDB and MApp VPCs, VPC Peering, Routing,
+  Security Groups, and a Bastion Host to access MDB VPC's private resources.
+
+Parameters:
+  BastionKeyName:
+    Description: Name of an existing EC2 KeyPair to SSH into Bastion Host
+    Type: AWS::EC2::KeyPair::KeyName
+  BastionAllowedIP:
+    Description: Public IP (CIDR) allowed to SSH into the Bastion Host (e.g., 203.0.113.0/32)
+    Type: String
 
 Resources:
 
-  ## MDB VPC (Private VPC for database & critical systems)
+  ### MDB VPC and Subnets
   MDBVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -16,7 +24,6 @@ Resources:
         - Key: Name
           Value: MDB-VPC
 
-  # MDB Private Subnet 1 (AZ1)
   MDBPrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -27,7 +34,6 @@ Resources:
         - Key: Name
           Value: MDB-Private-Subnet-1
 
-  # MDB Private Subnet 2 (AZ2)
   MDBPrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -38,7 +44,6 @@ Resources:
         - Key: Name
           Value: MDB-Private-Subnet-2
 
-  # MDB Private Route Table
   MDBPrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -47,23 +52,19 @@ Resources:
         - Key: Name
           Value: MDB-Private-RouteTable
 
-  # Associate MDB Private Subnet 1 with Private Route Table
   MDBPrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref MDBPrivateSubnet1
       RouteTableId: !Ref MDBPrivateRouteTable
 
-  # Associate MDB Private Subnet 2 with Private Route Table
   MDBPrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref MDBPrivateSubnet2
       RouteTableId: !Ref MDBPrivateRouteTable
 
-  # No Internet Gateway or route to IGW in MDB VPC - fully private
-
-  ## MApp VPC (Public + Private subnets)
+  ### MApp VPC and Subnets
   MAppVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -74,7 +75,6 @@ Resources:
         - Key: Name
           Value: M-App-VPC
 
-  # MApp Public Subnet 1 (AZ1)
   MAppPublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -86,41 +86,6 @@ Resources:
         - Key: Name
           Value: MApp-Public-Subnet-1
 
-  # MApp Public Subnet 2 (AZ2)
-  MAppPublicSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref MAppVPC
-      CidrBlock: 10.20.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: MApp-Public-Subnet-2
-
-  # MApp Private Subnet 1 (AZ1)
-  MAppPrivateSubnet1:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref MAppVPC
-      CidrBlock: 10.20.101.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: MApp-Private-Subnet-1
-
-  # MApp Private Subnet 2 (AZ2)
-  MAppPrivateSubnet2:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref MAppVPC
-      CidrBlock: 10.20.102.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
-      Tags:
-        - Key: Name
-          Value: MApp-Private-Subnet-2
-
-  # MApp Internet Gateway
   MAppInternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -128,14 +93,12 @@ Resources:
         - Key: Name
           Value: MApp-IGW
 
-  # Attach Internet Gateway to MApp VPC
   MAppAttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref MAppVPC
       InternetGatewayId: !Ref MAppInternetGateway
 
-  # MApp Public Route Table (with IGW)
   MAppPublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -144,7 +107,6 @@ Resources:
         - Key: Name
           Value: MApp-Public-RouteTable
 
-  # Route for Public Route Table to Internet Gateway
   MAppPublicRoute:
     Type: AWS::EC2::Route
     DependsOn: MAppAttachGateway
@@ -153,44 +115,13 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref MAppInternetGateway
 
-  # Associate Public Subnet 1 to Public Route Table
   MAppPublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref MAppPublicSubnet1
       RouteTableId: !Ref MAppPublicRouteTable
 
-  # Associate Public Subnet 2 to Public Route Table
-  MAppPublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref MAppPublicSubnet2
-      RouteTableId: !Ref MAppPublicRouteTable
-
-  # MApp Private Route Table (no route to IGW)
-  MAppPrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref MAppVPC
-      Tags:
-        - Key: Name
-          Value: MApp-Private-RouteTable
-
-  # Associate Private Subnet 1 to Private Route Table
-  MAppPrivateSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref MAppPrivateSubnet1
-      RouteTableId: !Ref MAppPrivateRouteTable
-
-  # Associate Private Subnet 2 to Private Route Table
-  MAppPrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref MAppPrivateSubnet2
-      RouteTableId: !Ref MAppPrivateRouteTable
-
-  ## VPC Peering Connection between MDB and MApp
+  ### VPC Peering
   VPCPeeringConnection:
     Type: AWS::EC2::VPCPeeringConnection
     Properties:
@@ -200,7 +131,6 @@ Resources:
         - Key: Name
           Value: MDB-MApp-Peering
 
-  # Route in MDB Private Route Table to MApp VPC CIDR via Peering
   MDBToMAppPeeringRoute:
     Type: AWS::EC2::Route
     Properties:
@@ -208,7 +138,6 @@ Resources:
       DestinationCidrBlock: 10.20.0.0/16
       VpcPeeringConnectionId: !Ref VPCPeeringConnection
 
-  # Route in MApp Public Route Table to MDB VPC CIDR via Peering
   MAppPublicToMDBPeeringRoute:
     Type: AWS::EC2::Route
     Properties:
@@ -216,64 +145,44 @@ Resources:
       DestinationCidrBlock: 10.10.0.0/16
       VpcPeeringConnectionId: !Ref VPCPeeringConnection
 
-  # Route in MApp Private Route Table to MDB VPC CIDR via Peering
-  MAppPrivateToMDBPeeringRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref MAppPrivateRouteTable
-      DestinationCidrBlock: 10.10.0.0/16
-      VpcPeeringConnectionId: !Ref VPCPeeringConnection
-
-  # Security Group for MDB VPC allowing all traffic from MApp VPC CIDR
+  ### Security Groups
   MDBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow all traffic from M-App-VPC CIDR block
+      GroupDescription: Allow SSH from MApp VPC
       VpcId: !Ref MDBVPC
       SecurityGroupIngress:
-        - IpProtocol: -1
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
           CidrIp: 10.20.0.0/16
 
-  # Security Group for MApp VPC allowing all traffic from MDB VPC CIDR
-  MAppSecurityGroup:
+  BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow all traffic from MDB-VPC CIDR block
+      GroupDescription: Allow SSH from user IP
       VpcId: !Ref MAppVPC
       SecurityGroupIngress:
-        - IpProtocol: -1
-          CidrIp: 10.10.0.0/16
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref BastionAllowedIP
+
+  ### Bastion Host
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      KeyName: !Ref BastionKeyName
+      SubnetId: !Ref MAppPublicSubnet1
+      ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI (update as needed)
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      Tags:
+        - Key: Name
+          Value: BastionHost
 
 Outputs:
-
-  MDBVPCId:
-    Description: "MDB VPC ID"
-    Value: !Ref MDBVPC
-
-  MAppVPCId:
-    Description: "MApp VPC ID"
-    Value: !Ref MAppVPC
-
-  MDBPrivateSubnet1Id:
-    Description: "MDB Private Subnet 1 ID"
-    Value: !Ref MDBPrivateSubnet1
-
-  MDBPrivateSubnet2Id:
-    Description: "MDB Private Subnet 2 ID"
-    Value: !Ref MDBPrivateSubnet2
-
-  MAppPublicSubnet1Id:
-    Description: "MApp Public Subnet 1 ID"
-    Value: !Ref MAppPublicSubnet1
-
-  MAppPublicSubnet2Id:
-    Description: "MApp Public Subnet 2 ID"
-    Value: !Ref MAppPublicSubnet2
-
-  MAppPrivateSubnet1Id:
-    Description: "MApp Private Subnet 1 ID"
-    Value: !Ref MAppPrivateSubnet1
-
-  MAppPrivateSubnet2Id:
-    Description: "MApp Private Subnet 2 ID"
-    Value: !Ref MAppPrivateSubnet2
+  BastionHostPublicIP:
+    Description: Public IP of the Bastion Host
+    Value: !GetAtt BastionHost.PublicIp
